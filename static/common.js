@@ -58,9 +58,23 @@ function word(g) {
   return "getting warmer";
 }
 
+const FLAME_OUTER = "M12 3c.4 2.6 2.3 4.2 3.7 6.1 1.3 1.8 1.9 3.4 1.9 5.2 0 3.4-2.5 6.2-5.6 6.2s-5.6-2.8-5.6-6.2c0-2.2 1-3.8 2.3-5.1.2 1.4.8 2.4 1.7 2.9C10.2 9.5 10.6 5.9 12 3z";
+const FLAME_INNER = "M12 20.5c-1.5 0-2.6-1.1-2.6-2.6 0-1.5 1.2-2.5 2.1-3.7.6 1 2.9 2.2 2.9 3.8 0 1.4-1 2.5-2.4 2.5z";
+
+function flame(cls = "") {
+  return `<svg class="flame ${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path class="outer" d="${FLAME_OUTER}"/><path class="inner" d="${FLAME_INNER}"/></svg>`;
+}
+
+// Only the top 100 earn a flame: lit for the top 10, an outline for the rest.
+function heatIcon(g) {
+  if (g.rank === 0 || (g.rank && g.rank <= 10)) return flame("lit");
+  if (g.rank && g.rank <= 100) return flame();
+  return "";
+}
+
 function proxCell(g, ref) {
   const p = proximity(g, ref);
-  return `<div class="prox" style="--c:${heat(p)}"><div class="bar"><i data-w="${(p * 100).toFixed(1)}"></i></div><span class="lbl">${label(g, ref)}</span></div>`;
+  return `<div class="prox" style="--c:${heat(p)}"><div class="bar ${p > 0.8 ? "glow" : ""}"><i data-w="${(p * 100).toFixed(1)}"></i></div><span class="lbl">${heatIcon(g)}${label(g, ref)}</span></div>`;
 }
 
 // Let bar widths animate in after insertion.
@@ -116,5 +130,7 @@ function renderMessages(el, msgs, me) {
   el.scrollTop = el.scrollHeight;
 }
 
-const BRAND = `<a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 24 24" fill="none"><circle cx="8.5" cy="12" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="15.5" cy="12" r="5.5" stroke="#f2b45a" stroke-width="1.4"/></svg>warmer</a>`;
+const BRAND = `<a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <defs><linearGradient id="brand-grad" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f2b45a"/><stop offset="1" stop-color="#f06a5d"/></linearGradient></defs>
+  <path d="${FLAME_OUTER}" stroke="url(#brand-grad)" stroke-width="1.5" stroke-linejoin="round"/><path class="ember" d="${FLAME_INNER}" fill="#f2b45a"/></svg>warmer</a>`;
 document.querySelectorAll("[data-brand]").forEach((el) => (el.outerHTML = BRAND));

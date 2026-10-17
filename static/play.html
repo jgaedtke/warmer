@@ -6,6 +6,8 @@
   <title>Warmer — find the word</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="/static/flame.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#0a0b0d">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -90,7 +92,7 @@ function render(flashWord) {
   const last = S.guesses.find((g) => g.word === latestWord);
   if (last) {
     const p = proximity(last, ref);
-    $("#latest").innerHTML = `<div class="latest-card fade-in" style="--c:${heat(p)}"><span class="word">${esc(last.word)}</span><span class="meta"><b>${word(last)}</b>${last.sim.toFixed(2)} · ${label(last, ref)}</span></div>`;
+    $("#latest").innerHTML = `<div class="latest-card fade-in" style="--c:${heat(p)}"><span class="word">${esc(last.word)}</span><span class="meta"><b>${heatIcon(last)}${word(last)}</b>${last.sim.toFixed(2)} · ${label(last, ref)}</span></div>`;
     const best = Math.max(...S.guesses.map((g) => proximity(g, ref)));
     setGlow(best);
   }
@@ -132,6 +134,7 @@ function finish(state, animate) {
   const n = S.guesses.length;
   const f = $("#finish");
   f.innerHTML = `
+    ${solved ? `<div class="finish-flame">${flame("lit")}</div>` : ""}
     <h2>${solved ? `Found in ${n} guess${n === 1 ? "" : "es"}` : "The word was"}</h2>
     <div class="secret-word">${esc(state.secret)}</div>
     ${state.note ? `<p class="note">${esc(state.note)}</p>${S.host_name ? `<p class="muted" style="margin-top:8px">— ${esc(S.host_name)}</p>` : ""}` : ""}

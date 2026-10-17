@@ -6,6 +6,8 @@
   <title>Warmer — observer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="/static/flame.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#0a0b0d">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -105,7 +107,7 @@ function render() {
   $("#no-guesses").classList.toggle("hidden", gs.length > 0);
   $("#feed").innerHTML = [...gs].reverse().map((g) => {
     const p = proximity(g, ref);
-    return `<li class="${fresh.has(g.word) ? "new" : ""}" style="--c:${heat(p)}"><time>${clock(g.ts).slice(0, 5)}</time><span class="fw">${esc(g.word)}${g.hint ? '<span class="tag">hint</span>' : ""}</span><span class="fv">${g.sim.toFixed(2)} · ${label(g, ref)}</span></li>`;
+    return `<li class="${fresh.has(g.word) ? "new" : ""}" style="--c:${heat(p)}"><time>${clock(g.ts).slice(0, 5)}</time><span class="fw">${esc(g.word)}${g.hint ? '<span class="tag">hint</span>' : ""}</span><span class="fv">${heatIcon(g)}${g.sim.toFixed(2)} · ${label(g, ref)}</span></li>`;
   }).join("");
   fresh.clear();
 
