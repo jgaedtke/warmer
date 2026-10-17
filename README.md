@@ -26,5 +26,5 @@ by how close each guess is in meaning, while the creator watches every guess liv
   - `/h/<id>?k=<key>`: the private observer view shows a live guess feed, a proximity chart,
     stats, which top neighbours have been hit, and lets the creator send nudges.
 - **Live updates**: server-sent events, with presence shown in both directions
-  ("Jamie is watching" / "seeker online").
+  ("Jason is watching" / "seeker online").
 - **Storage**: SQLite (`warmer.db`, or the `WARMER_DB` env var).
