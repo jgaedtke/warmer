@@ -1,4 +1,4 @@
-# Kindred
+# Warmer
 
 A two-player semantic word game built on word2vec, in the spirit of Semantle.
 One person chooses a secret word and shares a link. Their friend hunts for it, guided
@@ -27,4 +27,4 @@ by how close each guess is in meaning, while the creator watches every guess liv
     stats, which top neighbours have been hit, and lets the creator send nudges.
 - **Live updates**: server-sent events, with presence shown in both directions
   ("Jamie is watching" / "seeker online").
-- **Storage**: SQLite (`kindred.db`, or the `KINDRED_DB` env var).
+- **Storage**: SQLite (`warmer.db`, or the `WARMER_DB` env var).

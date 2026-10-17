@@ -1,4 +1,4 @@
-"""Kindred — a two-player semantic word game built on word2vec.
+"""Warmer — a two-player semantic word game built on word2vec.
 
 One person picks a secret word and shares a link; their friend hunts for it by
 semantic proximity while the creator watches every guess live.
@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 ROOT = Path(__file__).parent
 DATA = ROOT / "data"
 STATIC = ROOT / "static"
-DB_PATH = os.environ.get("KINDRED_DB", str(ROOT / "kindred.db"))
+DB_PATH = os.environ.get("WARMER_DB", str(ROOT / "warmer.db"))
 TOP_N = 1000  # how many nearest neighbours earn a rank
 
 # ---------------------------------------------------------------- embeddings
@@ -152,7 +152,7 @@ class Hub:
 
 
 hub = Hub()
-app = FastAPI(title="Kindred")
+app = FastAPI(title="Warmer")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 

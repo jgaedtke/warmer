@@ -1,4 +1,4 @@
-// Shared helpers for all Kindred pages.
+// Shared helpers for all Warmer pages.
 
 const $ = (sel, el = document) => el.querySelector(sel);
 
@@ -116,5 +116,5 @@ function renderMessages(el, msgs, me) {
   el.scrollTop = el.scrollHeight;
 }
 
-const BRAND = `<a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 24 24" fill="none"><circle cx="8.5" cy="12" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="15.5" cy="12" r="5.5" stroke="#f2b45a" stroke-width="1.4"/></svg>kindred</a>`;
+const BRAND = `<a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 24 24" fill="none"><circle cx="8.5" cy="12" r="5.5" stroke="currentColor" stroke-width="1.4"/><circle cx="15.5" cy="12" r="5.5" stroke="#f2b45a" stroke-width="1.4"/></svg>warmer</a>`;
 document.querySelectorAll("[data-brand]").forEach((el) => (el.outerHTML = BRAND));

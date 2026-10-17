@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kindred — choose a word</title>
+  <title>Warmer — choose a word</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
@@ -111,7 +111,7 @@ $("#form").onsubmit = async (e) => {
       secret: okWord, host_name: $("#host_name").value, theme: $("#theme").value,
       note: $("#note").value, allow_hints: $("#allow_hints").checked,
     }});
-    try { localStorage.setItem("kindred:name", $("#host_name").value); } catch {}
+    try { localStorage.setItem("warmer:name", $("#host_name").value); } catch {}
     saveGame({ id: g.id, word: okWord, host_url: g.host_url, created: Date.now() });
     showDone(okWord, location.origin + g.play_url, location.origin + g.host_url);
   } catch (err) { $("#create-err").textContent = err.message; createBtn.disabled = false; }
@@ -127,16 +127,16 @@ function showDone(w, playUrl, hostUrl) {
   $("#open-host").href = hostUrl;
   if (navigator.share) {
     const b = $("#share-play"); b.classList.remove("hidden");
-    b.onclick = () => navigator.share({ title: "Kindred", text: "I picked a secret word for you. Can you find it?", url: playUrl }).catch(() => {});
+    b.onclick = () => navigator.share({ title: "Warmer", text: "I picked a secret word for you. Can you find it?", url: playUrl }).catch(() => {});
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function loadGames() { try { return JSON.parse(localStorage.getItem("kindred:games") || "[]"); } catch { return []; } }
-function saveGame(g) { try { localStorage.setItem("kindred:games", JSON.stringify([g, ...loadGames()].slice(0, 20))); } catch {} }
+function loadGames() { try { return JSON.parse(localStorage.getItem("warmer:games") || "[]"); } catch { return []; } }
+function saveGame(g) { try { localStorage.setItem("warmer:games", JSON.stringify([g, ...loadGames()].slice(0, 20))); } catch {} }
 
 (function renderPast() {
-  try { $("#host_name").value = localStorage.getItem("kindred:name") || ""; } catch {}
+  try { $("#host_name").value = localStorage.getItem("warmer:name") || ""; } catch {}
   const games = loadGames();
   if (!games.length) return;
   $("#past").classList.remove("hidden");
