@@ -25,6 +25,8 @@ DATA = ROOT / "data"
 STATIC = ROOT / "static"
 DB_PATH = os.environ.get("WARMER_DB", str(ROOT / "warmer.db"))
 TOP_N = 1000  # how many nearest neighbours earn a rank
+# Pre-fills the creator's name on the create page; a name the browser remembers takes precedence.
+DEFAULT_NAME = os.environ.get("WARMER_DEFAULT_NAME", "").strip()[:40]
 
 # ---------------------------------------------------------------- embeddings
 
@@ -195,6 +197,16 @@ def check_word(word: str):
     difficulty = "gentle" if spread >= 30 else "moderate" if spread >= 22 else "challenging"
     return {"ok": True, "word": w, "neighbours": [[x, round(float(sims[W2I[x]]) * 100, 1)] for x in ranked[:12]],
             "reference": ref, "difficulty": difficulty}
+
+
+@app.get("/api/config")
+def config():
+    return {"default_name": DEFAULT_NAME}
+
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
 
 
 @app.get("/api/random")

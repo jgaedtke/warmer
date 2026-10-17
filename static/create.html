@@ -138,7 +138,10 @@ function loadGames() { try { return JSON.parse(localStorage.getItem("warmer:game
 function saveGame(g) { try { localStorage.setItem("warmer:games", JSON.stringify([g, ...loadGames()].slice(0, 20))); } catch {} }
 
 (function renderPast() {
-  try { $("#host_name").value = localStorage.getItem("warmer:name") || ""; } catch {}
+  let saved = null;
+  try { saved = localStorage.getItem("warmer:name"); } catch {}
+  if (saved) $("#host_name").value = saved;
+  else api("/api/config").then((c) => { if (!$("#host_name").value) $("#host_name").value = c.default_name; }).catch(() => {});
   const games = loadGames();
   if (!games.length) return;
   $("#past").classList.remove("hidden");

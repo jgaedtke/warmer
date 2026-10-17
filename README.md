@@ -9,6 +9,25 @@ by how close each guess is in meaning, while the creator watches every guess liv
     pip install -r requirements.txt
     python app.py            # http://localhost:8000  (PORT env var to change)
 
+Settings (environment variables):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `8000` | HTTP port |
+| `WARMER_DB` | `./warmer.db` | SQLite database path |
+| `WARMER_DEFAULT_NAME` | *(empty)* | Pre-fills the creator's name on the create page |
+
+## Deploy
+
+The app is a single process (~200 MB RAM) that holds live connections in memory, so run
+**one instance**. Any host that runs a Dockerfile works.
+
+- **Render (free, easiest):** Dashboard → New → Blueprint → select this repo. `render.yaml`
+  sets everything up. Free instances sleep after 15 idle minutes (first visit then takes
+  about 30–60 s to wake), and the database resets on every redeploy or restart.
+- **Railway / Fly.io (persistent):** deploy the Dockerfile and mount a volume at `/data`
+  so `/data/warmer.db` survives restarts.
+
 ## How it works
 
 - **Embeddings**: Google News word2vec (300-d, ~100B-word corpus). The first 1M entries

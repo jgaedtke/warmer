@@ -1,0 +1,10 @@
+# One-click deploy on Render: Dashboard → New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: warmer
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: WARMER_DEFAULT_NAME
+        value: Jason
