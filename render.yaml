@@ -1,10 +1,16 @@
 # One-click deploy on Render: Dashboard → New → Blueprint → pick this repo.
+# Starter plan stays awake; the disk keeps the SQLite database (WARMER_DB=/data/warmer.db,
+# set in the Dockerfile) across deploys and restarts.
 services:
   - type: web
     name: warmer
     runtime: docker
-    plan: free
+    plan: starter
     healthCheckPath: /healthz
+    disk:
+      name: warmer-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: WARMER_DEFAULT_NAME
         value: Jason

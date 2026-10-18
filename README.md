@@ -22,9 +22,12 @@ Settings (environment variables):
 The app is a single process (~200 MB RAM) that holds live connections in memory, so run
 **one instance**. Any host that runs a Dockerfile works.
 
-- **Render (free, easiest):** Dashboard → New → Blueprint → select this repo. `render.yaml`
-  sets everything up. Free instances sleep after 15 idle minutes (first visit then takes
-  about 30–60 s to wake), and the database resets on every redeploy or restart.
+- **Render (easiest):** Dashboard → New → Blueprint → select this repo. `render.yaml`
+  sets up a Starter instance (always on, ~$7/month) with a 1 GB persistent disk at `/data`
+  (~$0.25/month), so games survive deploys and restarts. Deploys have a few seconds of
+  downtime because a service with a disk runs as a single instance. To try it for free
+  instead, set `plan: free` and remove the `disk` block: free instances sleep after
+  15 idle minutes and the database resets on every restart.
 - **Railway / Fly.io (persistent):** deploy the Dockerfile and mount a volume at `/data`
   so `/data/warmer.db` survives restarts.
 
