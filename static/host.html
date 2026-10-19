@@ -11,146 +11,53 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<!-- One-way games created before two-way matches existed: the word-keeper's private link. -->
 <div class="wrap wide">
   <header class="top"><span data-brand></span><span class="top-meta"><span class="pill" id="status">playing</span><span class="pill live" id="seeker">seeker offline</span></span></header>
 
   <div id="loading" class="empty">Loading…</div>
   <div id="denied" class="hidden"><h1>Not your word.</h1><p class="lede">This observer link is invalid or incomplete. <a href="/">Start your own →</a></p></div>
 
-  <main id="game" class="hidden">
-    <div class="row" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;margin-bottom:26px">
-      <div>
-        <h2 style="margin:0">Your secret word <button class="btn sm ghost" id="blur-btn" title="Hide for screen-sharing">hide</button></h2>
-        <div class="secret-word" id="secret"></div>
-        <div class="muted" id="theme" style="font-size:14px"></div>
-      </div>
-      <div class="linkbox" style="min-width:min(100%,360px)"><code id="play-url"></code><button class="btn sm" id="copy-play">Copy invite</button></div>
-    </div>
-
-    <div class="stats">
-      <div class="stat"><div class="k">Guesses</div><div class="v" id="s-count">0</div></div>
-      <div class="stat"><div class="k">Closest rank</div><div class="v" id="s-rank">—</div></div>
-      <div class="stat"><div class="k">Best similarity</div><div class="v" id="s-sim">—</div></div>
-      <div class="stat"><div class="k">Elapsed</div><div class="v" id="s-time">—</div></div>
-    </div>
-
-    <div class="grid host section-gap" style="margin-top:16px">
-      <div>
-        <div class="card chart">
-          <div class="row" style="justify-content:space-between"><h2>The path so far</h2><span class="faint mono" style="font-size:11px">similarity by guess · line = best so far</span></div>
-          <div id="chart"></div>
-        </div>
-        <div class="card">
-          <div class="row" style="justify-content:space-between"><h2>Live guesses</h2><span class="faint mono" style="font-size:11px">newest first</span></div>
-          <ul class="feed" id="feed"></ul>
-          <div class="empty" id="no-guesses">Waiting for the first guess…</div>
-        </div>
-      </div>
-      <div>
-        <div class="card">
-          <h2>Send a nudge</h2>
-          <div class="msgs" id="msgs"></div>
-          <form class="row" id="msg-form" autocomplete="off"><input class="input grow" id="msg" maxlength="280" placeholder="Think smaller… / Remember the boat?"><button class="btn">Send</button></form>
-          <div class="status-line err" id="msg-err"></div>
-        </div>
-        <div class="card">
-          <h2>Nearest neighbours</h2>
-          <p class="faint" style="font-size:13px;margin:-6px 0 12px">Lit up once your friend has guessed them.</p>
-          <div class="chips" id="neighbours"></div>
-        </div>
-      </div>
-    </div>
-  </main>
+  <main id="game" class="hidden"><div id="observer"></div></main>
 </div>
 
 <script src="/static/common.js"></script>
+<script src="/static/observer.js"></script>
 <script>
 const id = location.pathname.split("/").pop();
-const key = new URLSearchParams(location.search).get("k") || "";
-const q = `k=${encodeURIComponent(key)}`;
-let S, fresh = new Set();
+const q = `k=${encodeURIComponent(new URLSearchParams(location.search).get("k") || "")}`;
+let S;
+const nameOf = (s) => (s === "host" ? "You" : "Seeker");
+const panel = ObserverPanel($("#observer"), {});
+const playUrl = `${location.origin}/g/${id}`;
+panel.el("aside").innerHTML = `<div class="linkbox" style="min-width:min(100%,360px)"><code>${esc(playUrl)}</code><button class="btn sm" id="copy-play">Copy invite</button></div>`;
+panel.el("side").innerHTML = `<div class="card"><h2>Send a nudge</h2><div class="msgs" id="msgs"></div>
+  <form class="row" id="msg-form" autocomplete="off"><input class="input grow" id="msg" maxlength="280" placeholder="Think smaller… / Remember the boat?"><button class="btn">Send</button></form>
+  <div class="status-line err" id="msg-err"></div></div>`;
+$("#copy-play").onclick = (e) => copy(playUrl, e.currentTarget);
+
+function statusPill(st) {
+  const el = $("#status");
+  el.className = `pill ${st}`;
+  el.textContent = st === "solved" ? "solved" : st === "revealed" ? "gave up" : "in progress";
+}
 
 async function load() {
   try { S = await api(`/api/games/${id}/host?${q}`); }
   catch { $("#loading").classList.add("hidden"); $("#denied").classList.remove("hidden"); return false; }
   $("#loading").classList.add("hidden"); $("#game").classList.remove("hidden");
-  $("#secret").textContent = S.secret;
   document.title = `Warmer — watching “${S.secret}”`;
-  $("#theme").textContent = S.theme ? `Clue: ${S.theme}` : "";
-  const playUrl = `${location.origin}/g/${id}`;
-  $("#play-url").textContent = playUrl;
-  $("#copy-play").onclick = (e) => copy(playUrl, e.currentTarget);
-  render(); renderMessages($("#msgs"), S.messages, "host"); presence(S.presence);
+  panel.load(S); statusPill(S.status);
+  renderMessages($("#msgs"), S.messages, "host", nameOf);
+  presence(S.presence);
+  if (S.guesses.length) setGlow(Math.max(...S.guesses.map((g) => proximity(g, S.reference))));
   return true;
 }
 
-$("#blur-btn").onclick = () => {
-  const blurred = $("#secret").classList.toggle("blur");
-  $("#blur-btn").textContent = blurred ? "show" : "hide";
-};
-$("#secret").onclick = () => { if ($("#secret").classList.contains("blur")) $("#blur-btn").click(); };
-
-function render() {
-  const ref = S.reference, gs = S.guesses;
-  $("#s-count").textContent = gs.length;
-  const ranked = gs.filter((g) => g.rank !== null && g.rank !== undefined);
-  const bestRank = ranked.length ? Math.min(...ranked.map((g) => g.rank)) : null;
-  $("#s-rank").textContent = bestRank === 0 ? "found" : bestRank ? `#${bestRank}` : "—";
-  $("#s-rank").style.color = bestRank !== null ? heat(proximity({ rank: bestRank }, ref)) : "";
-  const bestSim = gs.length ? Math.max(...gs.map((g) => g.sim)) : null;
-  $("#s-sim").textContent = bestSim !== null ? bestSim.toFixed(2) : "—";
-
-  const st = $("#status");
-  st.className = `pill ${S.status}`;
-  st.textContent = S.status === "solved" ? "solved" : S.status === "revealed" ? "gave up" : "in progress";
-
-  $("#no-guesses").classList.toggle("hidden", gs.length > 0);
-  $("#feed").innerHTML = [...gs].reverse().map((g) => {
-    const p = proximity(g, ref);
-    return `<li class="${fresh.has(g.word) ? "new" : ""}" style="--c:${heat(p)}"><time>${clock(g.ts).slice(0, 5)}</time><span class="fw">${esc(g.word)}${g.hint ? '<span class="tag">hint</span>' : ""}</span><span class="fv">${heatIcon(g)}${g.sim.toFixed(2)} · ${label(g, ref)}</span></li>`;
-  }).join("");
-  fresh.clear();
-
-  const guessed = new Set(gs.map((g) => g.word));
-  $("#neighbours").innerHTML = S.neighbours.map(([w, s], i) =>
-    `<span class="chip ${guessed.has(w) ? "hit" : ""}" style="--c:${heat(rankProximity(i + 1))}" title="#${i + 1}"><b>${esc(w)}</b>${s}</span>`).join("");
-
-  chart();
-  if (gs.length) setGlow(Math.max(...gs.map((g) => proximity(g, ref))));
-}
-
-function chart() {
-  const gs = S.guesses, ref = S.reference, W = 640, H = 200, P = { l: 34, r: 12, t: 10, b: 22 };
-  if (!gs.length) { $("#chart").innerHTML = `<div class="empty">The chart fills in as they guess.</div>`; return; }
-  const sims = gs.map((g) => g.sim);
-  const yMin = Math.min(0, ...sims) - 5, yMax = Math.max(ref.top1 + 5, ...sims, 40);
-  const n = Math.max(gs.length, 2);
-  const x = (i) => P.l + (i / (n - 1)) * (W - P.l - P.r);
-  const y = (v) => P.t + (1 - (v - yMin) / (yMax - yMin)) * (H - P.t - P.b);
-  let best = -Infinity;
-  const bestPts = gs.map((g, i) => { best = Math.max(best, g.sim); return `${x(i).toFixed(1)},${y(best).toFixed(1)}`; });
-  const refLine = (v, txt) => `<line class="axis" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke-dasharray="3 4"/><text x="${W - P.r}" y="${y(v) - 4}" text-anchor="end">${txt}</text>`;
-  $("#chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}">
-    <line class="axis" x1="${P.l}" x2="${W - P.r}" y1="${y(0)}" y2="${y(0)}"/>
-    <text x="${P.l - 6}" y="${y(0) + 3}" text-anchor="end">0</text>
-    ${refLine(ref.top1000, "#1000")}${refLine(ref.top10, "#10")}
-    <polyline points="${bestPts.join(" ")}" fill="none" stroke="#f2b45a" stroke-width="1.6" stroke-linejoin="round" opacity=".85" vector-effect="non-scaling-stroke"/>
-    ${gs.map((g, i) => `<circle cx="${x(i)}" cy="${y(g.sim)}" r="3.2" fill="${heat(proximity(g, ref))}"><title>${esc(g.word)} — ${g.sim.toFixed(2)}</title></circle>`).join("")}
-    <text x="${P.l}" y="${H - 4}">1</text><text x="${W - P.r}" y="${H - 4}" text-anchor="end">${gs.length}</text>
-  </svg>`;
-}
-
-function tick() {
-  if (!S || !S.guesses.length) return;
-  const start = S.guesses[0].ts, end = S.solved_at || (S.status === "playing" ? Date.now() / 1000 : S.guesses[S.guesses.length - 1].ts);
-  $("#s-time").textContent = duration(end - start);
-}
-setInterval(tick, 1000);
-
 function presence(p) {
-  const el = $("#seeker"), on = p.players > 0;
-  el.classList.toggle("on", on);
-  el.textContent = on ? (p.players > 1 ? `${p.players} seekers online` : "seeker online") : "seeker offline";
+  const el = $("#seeker"), n = p.player || 0;
+  el.classList.toggle("on", n > 0);
+  el.textContent = n ? (n > 1 ? `${n} seekers online` : "seeker online") : "seeker offline";
 }
 
 $("#msg-form").onsubmit = async (e) => {
@@ -163,26 +70,24 @@ $("#msg-form").onsubmit = async (e) => {
 
 load().then((ok) => {
   if (!ok) return;
-  tick();
   live(`/api/games/${id}/host/stream?${q}`, {
-    guess: (g) => {
-      if (S.guesses.some((x) => x.word === g.word)) return;
-      S.guesses.push(g); fresh.add(g.word); render(); tick();
-      if (g.rank === 0) toast(`They found “${S.secret}” in ${S.guesses.length} guesses!`, "Solved");
-      else if (g.rank && g.rank <= 10) toast(`“${g.word}” is #${g.rank} — they're very close.`, "Burning");
+    guess: ({ guess: g }) => {
+      if (!panel.add(g)) return;
+      setGlow(Math.max(...panel.state.guesses.map((x) => proximity(x, S.reference))));
+      if (g.rank === 0) toast(`They found “${S.secret}” in ${panel.state.guesses.length} guesses!`, "Solved");
+      else if (g.rank && g.rank <= 10) toast(g.word ? `“${g.word}” is #${g.rank} — they're very close.` : `A hidden guess is #${g.rank} — they're very close.`, "Burning");
     },
+    "guess-update": ({ guess }) => panel.update(guess),
     message: (m) => {
-      S.messages.push(m); renderMessages($("#msgs"), S.messages, "host");
+      S.messages.push(m); renderMessages($("#msgs"), S.messages, "host", nameOf);
       if (m.sender === "player") toast(m.text, "Seeker says");
     },
     presence,
-    finished: (st) => {
-      S.status = st.status;
-      if (st.status === "solved") S.solved_at = S.guesses[S.guesses.length - 1]?.ts;
-      render(); tick();
-      if (st.status === "revealed") toast("They gave up and revealed the word.", "Game over");
+    finished: ({ state }) => {
+      panel.finish(state); statusPill(state.status);
+      if (state.status === "revealed") toast("They gave up and revealed the word.", "Game over");
     },
-  }, async () => { const f = await api(`/api/games/${id}/host?${q}`); Object.assign(S, f); render(); renderMessages($("#msgs"), S.messages, "host"); });
+  }, async () => { S = await api(`/api/games/${id}/host?${q}`); panel.load(S); statusPill(S.status); renderMessages($("#msgs"), S.messages, "host", nameOf); });
 });
 </script>
 </body>

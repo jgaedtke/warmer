@@ -11,15 +11,21 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<!-- Serves both "/" (start a game) and "/j/<id>" (join one by choosing a word in return). -->
 <div class="wrap">
   <header class="top"><span data-brand></span></header>
 
+  <div id="loading" class="empty hidden">Loading…</div>
+  <div id="unavailable" class="hidden"><h1 id="un-title"></h1><p class="lede" id="un-text"></p></div>
+
   <section id="compose">
-    <h1>Choose a word.</h1>
+    <h1 id="heading">Choose a word.</h1>
+    <p class="lede hidden" id="join-lede"></p>
+    <div class="theme-banner hidden" id="their-theme"><small>Their clue for you</small><span></span></div>
 
     <form id="form" class="card" autocomplete="off" style="margin-top:32px">
       <label class="field">
-        <span>Secret word</span>
+        <span id="secret-label">Secret word</span>
         <div class="row">
           <input class="input big grow" id="secret" placeholder="e.g. lighthouse" maxlength="40" spellcheck="false" autocapitalize="off" required>
           <button type="button" class="btn" id="random" title="Pick a random word">Surprise me</button>
@@ -35,7 +41,7 @@
 
       <label class="field">
         <span>Your name <small>— shown to your friend</small></span>
-        <input class="input" id="host_name" maxlength="40" placeholder="Jason">
+        <input class="input" id="name" maxlength="40" placeholder="Your name">
       </label>
       <label class="field">
         <span>Theme or opening clue <small>— optional, visible from the start</small></span>
@@ -48,27 +54,10 @@
 
       <div class="row" style="justify-content:space-between; flex-wrap:wrap; gap:16px">
         <label class="toggle"><input type="checkbox" id="allow_hints" checked><i></i>Allow hints</label>
-        <button class="btn primary" id="create" type="submit" disabled>Create game →</button>
+        <button class="btn primary" id="submit" type="submit" disabled>Create game →</button>
       </div>
-      <div class="status-line err" id="create-err"></div>
+      <div class="status-line err" id="submit-err"></div>
     </form>
-  </section>
-
-  <section id="done" class="hidden fade-in">
-    <h1>Your word is <em id="done-word"></em>.</h1>
-    <p class="lede">Send the first link to your friend. Keep the second one for yourself — it lets you watch every guess live.</p>
-
-    <div class="card">
-      <h2>Share with your friend</h2>
-      <div class="linkbox"><code id="play-url"></code><button class="btn sm" id="copy-play">Copy</button><button class="btn sm hidden" id="share-play">Share…</button></div>
-    </div>
-    <div class="card">
-      <h2>Your private observer link</h2>
-      <div class="linkbox"><code id="host-url"></code><button class="btn sm" id="copy-host">Copy</button></div>
-      <p class="faint" style="font-size:13px;margin:12px 0 0">Anyone with this link can see the secret word. It's also saved in this browser.</p>
-      <div class="actions"><a class="btn primary" id="open-host">Open observer view →</a></div>
-    </div>
-    <p style="margin-top:24px"><a class="btn ghost" href="/">← Make another</a></p>
   </section>
 
   <section id="past" class="hidden section-gap">
@@ -79,12 +68,13 @@
 
 <script src="/static/common.js"></script>
 <script>
-const secret = $("#secret"), createBtn = $("#create"), st = $("#check-status");
+const joinId = location.pathname.startsWith("/j/") ? location.pathname.split("/").pop() : null;
+const secret = $("#secret"), submitBtn = $("#submit"), st = $("#check-status");
 let checkSeq = 0, timer, okWord = null;
 
 async function check() {
   const w = secret.value.trim();
-  okWord = null; createBtn.disabled = true;
+  okWord = null; submitBtn.disabled = true;
   if (!w) { st.textContent = ""; $("#preview").classList.add("hidden"); return; }
   const seq = ++checkSeq;
   try {
@@ -93,7 +83,7 @@ async function check() {
     if (!r.ok) {
       st.className = "status-line err"; st.textContent = r.reason; $("#preview").classList.add("hidden"); return;
     }
-    okWord = r.word; createBtn.disabled = false;
+    okWord = r.word; submitBtn.disabled = false;
     st.className = "status-line ok"; st.textContent = `“${r.word}” works — a ${r.difficulty} hunt.`;
     $("#neighbours").innerHTML = r.neighbours.map(([x, s]) => `<span class="chip"><b>${esc(x)}</b>${s}</span>`).join("");
     $("#preview-ref").innerHTML = `Nearest word scores <b>${r.reference.top1}</b> · 10th <b>${r.reference.top10}</b> · 1000th <b>${r.reference.top1000}</b>`;
@@ -106,46 +96,63 @@ $("#random").onclick = async () => { secret.value = (await api("/api/random")).w
 $("#form").onsubmit = async (e) => {
   e.preventDefault();
   if (!okWord) return;
-  createBtn.disabled = true;
+  submitBtn.disabled = true;
+  const body = { secret: okWord, name: $("#name").value, theme: $("#theme").value, note: $("#note").value, allow_hints: $("#allow_hints").checked };
   try {
-    const g = await api("/api/games", { method: "POST", body: {
-      secret: okWord, host_name: $("#host_name").value, theme: $("#theme").value,
-      note: $("#note").value, allow_hints: $("#allow_hints").checked,
-    }});
-    try { localStorage.setItem("warmer:name", $("#host_name").value); } catch {}
-    saveGame({ id: g.id, word: okWord, host_url: g.host_url, created: Date.now() });
-    showDone(okWord, location.origin + g.play_url, location.origin + g.host_url);
-  } catch (err) { $("#create-err").textContent = err.message; createBtn.disabled = false; }
+    const r = await api(joinId ? `/api/matches/${joinId}/join` : "/api/matches", { method: "POST", body });
+    store.set("warmer:name", $("#name").value);
+    store.set(`warmer:match:${r.id}`, r.token);
+    saveGame({ id: r.id, word: okWord, url: r.url, created: Date.now() });
+    location.href = r.url;
+  } catch (err) { $("#submit-err").textContent = err.message; submitBtn.disabled = false; }
 };
 
-function showDone(w, playUrl, hostUrl) {
-  $("#compose").classList.add("hidden"); $("#past").classList.add("hidden");
-  $("#done").classList.remove("hidden");
-  $("#done-word").textContent = w;
-  $("#play-url").textContent = playUrl; $("#host-url").textContent = hostUrl;
-  $("#copy-play").onclick = (e) => copy(playUrl, e.currentTarget);
-  $("#copy-host").onclick = (e) => copy(hostUrl, e.currentTarget);
-  $("#open-host").href = hostUrl;
-  if (navigator.share) {
-    const b = $("#share-play"); b.classList.remove("hidden");
-    b.onclick = () => navigator.share({ title: "Warmer", text: "I picked a secret word for you. Can you find it?", url: playUrl }).catch(() => {});
-  }
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
+function loadGames() { try { return JSON.parse(store.get("warmer:games", "[]")); } catch { return []; } }
+function saveGame(g) { store.set("warmer:games", JSON.stringify([g, ...loadGames().filter((x) => x.id !== g.id)].slice(0, 20))); }
 
-function loadGames() { try { return JSON.parse(localStorage.getItem("warmer:games") || "[]"); } catch { return []; } }
-function saveGame(g) { try { localStorage.setItem("warmer:games", JSON.stringify([g, ...loadGames()].slice(0, 20))); } catch {} }
-
-(function renderPast() {
-  let saved = null;
-  try { saved = localStorage.getItem("warmer:name"); } catch {}
-  if (saved) $("#host_name").value = saved;
-  else api("/api/config").then((c) => { if (!$("#host_name").value) $("#host_name").value = c.default_name; }).catch(() => {});
+function renderPast() {
   const games = loadGames();
   if (!games.length) return;
   $("#past").classList.remove("hidden");
-  $("#past-list").innerHTML = games.map((g) => `<li><time>${new Date(g.created).toLocaleDateString([], { month: "short", day: "numeric" })}</time><span class="fw">${esc(g.word)}</span><a class="btn sm" href="${esc(g.host_url)}">Watch →</a></li>`).join("");
-})();
+  $("#past-list").innerHTML = games.map((g) => `<li><time>${new Date(g.created).toLocaleDateString([], { month: "short", day: "numeric" })}</time><span class="fw">${esc(g.word)}</span><a class="btn sm" href="${esc(g.url || g.host_url)}">Open →</a></li>`).join("");
+}
+
+function unavailable(title, text) {
+  $("#loading").classList.add("hidden"); $("#compose").classList.add("hidden");
+  $("#un-title").textContent = title; $("#un-text").innerHTML = text;
+  $("#unavailable").classList.remove("hidden");
+}
+
+async function initJoin() {
+  const token = store.get(`warmer:match:${joinId}`);
+  if (token) { location.replace(`/m/${joinId}?k=${encodeURIComponent(token)}`); return; }
+  $("#compose").classList.add("hidden"); $("#loading").classList.remove("hidden");
+  let inv;
+  try { inv = await api(`/api/matches/${joinId}/invite`); }
+  catch { unavailable("No game here.", `This link may be mistyped. <a href="/">Start your own →</a>`); return; }
+  if (inv.joined) {
+    unavailable("This game is already underway.", `Both players have chosen their words. If you're one of them, open the personal link you were given. Or <a href="/">start a new game →</a>`);
+    return;
+  }
+  const who = inv.name || "Your friend";
+  document.title = `Warmer — ${who} chose a word for you`;
+  $("#heading").innerHTML = `${esc(who)} chose a word <em>for you</em>.`;
+  $("#join-lede").textContent = `Choose one for ${who} in return — then you both start guessing.`;
+  $("#join-lede").classList.remove("hidden");
+  if (inv.theme) { $("#their-theme").classList.remove("hidden"); $("#their-theme span").textContent = inv.theme; }
+  $("#secret-label").textContent = `Your word for ${who}`;
+  submitBtn.textContent = "Start guessing →";
+  $("#loading").classList.add("hidden"); $("#compose").classList.remove("hidden");
+  $("#name").value = store.get("warmer:name", "");
+}
+
+if (joinId) initJoin();
+else {
+  renderPast();
+  const saved = store.get("warmer:name");
+  if (saved) $("#name").value = saved;
+  else api("/api/config").then((c) => { if (!$("#name").value) $("#name").value = c.default_name; }).catch(() => {});
+}
 </script>
 </body>
 </html>

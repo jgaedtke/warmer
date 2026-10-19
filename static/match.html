@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Warmer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" href="/static/flame.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#0a0b0d">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<!-- A two-way game: each player guesses the other's word and watches the other guess theirs. -->
+<div class="wrap wide">
+  <header class="top"><span data-brand></span><span class="top-meta"><span class="pill live" id="presence">offline</span></span></header>
+
+  <div id="loading" class="empty">Loading…</div>
+  <div id="denied" class="hidden"><h1>Not your game.</h1><p class="lede">This personal link is invalid or incomplete. <a href="/">Start your own →</a></p></div>
+
+  <main id="game" class="hidden">
+    <h1 class="duo" id="duo"></h1>
+    <p class="summary hidden" id="summary"></p>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-seek" data-tab="seek" aria-controls="panel-seek"><span class="t" id="t-seek"></span><span class="m" id="m-seek"></span></button>
+      <button role="tab" id="tab-watch" data-tab="watch" aria-controls="panel-watch"><span class="t" id="t-watch"></span><span class="m" id="m-watch"></span><span class="badge hidden" id="badge"></span></button>
+    </div>
+
+    <section role="tabpanel" id="panel-seek" aria-labelledby="tab-seek">
+      <div id="waiting" class="card waiting hidden">
+        <div class="finish-flame"></div>
+        <h2>Waiting for your friend</h2>
+        <p class="muted">Send them this link. They'll choose a word for you, and then you both start guessing.</p>
+        <div class="linkbox"><code id="invite-url"></code><button class="btn sm" id="copy-invite">Copy</button><button class="btn sm hidden" id="share-invite">Share…</button></div>
+      </div>
+      <div id="seeker"></div>
+    </section>
+    <section role="tabpanel" id="panel-watch" aria-labelledby="tab-watch" class="hidden"><div id="observer"></div></section>
+
+    <section class="card section-gap" id="chat">
+      <h2>Messages with <span id="chat-name"></span></h2>
+      <div class="msgs" id="msgs"></div>
+      <form class="row" id="msg-form" autocomplete="off"><input class="input grow" id="msg" maxlength="280" placeholder="Say something…"><button class="btn">Send</button></form>
+      <div class="status-line err" id="msg-err"></div>
+    </section>
+
+    <p class="personal faint">Your personal link — use it to continue on another device. Keep it to yourself: it shows your secret word.
+      <button class="btn sm ghost" id="copy-personal">Copy personal link</button></p>
+  </main>
+</div>
+
+<script src="/static/common.js"></script>
+<script src="/static/seeker.js"></script>
+<script src="/static/observer.js"></script>
+<script>
+const id = location.pathname.split("/").pop();
+const key = new URLSearchParams(location.search).get("k") || "";
+const q = `k=${encodeURIComponent(key)}`;
+const base = `/api/matches/${id}`;
+let M, seeker = null, tab = null, unseen = 0;
+
+const them = () => (M.me === "a" ? "b" : "a");
+const theirName = () => M.names[them()] || "Your friend";
+const nameOf = (s) => M.names[s] || "Friend";
+
+const observer = ObserverPanel($("#observer"), {});
+$("#waiting .finish-flame").innerHTML = flame("lit");
+
+function ensureSeeker() {
+  if (seeker || !M.seek) return;
+  seeker = SeekerPanel($("#seeker"), {
+    urls: { guess: `${base}/guess?${q}`, hint: `${base}/hint?${q}`, giveUp: `${base}/give-up?${q}`, visibility: `${base}/visibility?${q}` },
+    keeperName: theirName,
+    finishCta: `<a class="btn primary" href="/">Start a new game →</a>`,
+    onHeat: (p) => { if (tab === "seek") setGlow(p); },
+  });
+}
+
+async function load() {
+  M = await api(`${base}?${q}`);
+  store.set(`warmer:match:${id}`, key);
+  const mine = M.names[M.me] || "You";
+  $("#duo").innerHTML = `${esc(mine)} <span class="amp">&amp;</span> ${M.joined ? esc(theirName()) : `<span class="faint">…</span>`}`;
+  document.title = M.joined ? `Warmer — ${mine} & ${theirName()}` : "Warmer — waiting for your friend";
+  $("#chat-name").textContent = M.joined ? theirName() : "your friend";
+
+  const invite = `${location.origin}${M.invite_url}`;
+  $("#waiting").classList.toggle("hidden", !!M.seek);
+  $("#invite-url").textContent = invite;
+  $("#copy-invite").onclick = (e) => copy(invite, e.currentTarget);
+  if (navigator.share) {
+    $("#share-invite").classList.remove("hidden");
+    $("#share-invite").onclick = () => navigator.share({ title: "Warmer", text: "I picked a secret word for you. Pick one for me!", url: invite }).catch(() => {});
+  }
+
+  ensureSeeker();
+  seeker?.load(M.seek);
+  observer.load(M.watch);
+  renderMessages($("#msgs"), M.messages, M.me, nameOf);
+  presence(M.presence);
+  meta();
+  if (!tab) show(location.hash === "#watch" ? "watch" : location.hash === "#find" ? "find" : store.get(`warmer:tab:${id}`, "seek"));
+}
+
+function meta() {
+  const desc = (s) => {
+    if (!s) return "waiting for them to choose";
+    const n = s.guesses.length, ranks = s.guesses.filter((g) => g.rank != null).map((g) => g.rank);
+    const best = ranks.length ? Math.min(...ranks) : null;
+    if (s.status === "solved") return `found in ${n}`;
+    if (s.status === "revealed") return `gave up after ${n}`;
+    return n ? `${n} guess${n === 1 ? "" : "es"}${best ? ` · best #${best}` : ""}` : "no guesses yet";
+  };
+  const seekState = seeker?.state, watchState = observer.state;
+  $("#t-seek").textContent = M.joined ? `Find ${theirName()}'s word` : "Find their word";
+  $("#m-seek").textContent = desc(seekState);
+  $("#t-watch").textContent = M.joined ? `${theirName()} finding yours` : "Your word";
+  $("#m-watch").textContent = M.joined ? desc(watchState) : "waiting for them to join";
+  $("#badge").textContent = unseen;
+  $("#badge").classList.toggle("hidden", !unseen);
+
+  const done = (s) => s && s.status !== "playing";
+  const sum = $("#summary");
+  if (done(seekState) && done(watchState)) {
+    const line = (who, s) => `${who} ${s.status === "solved" ? `found it in <b>${s.guesses.length}</b>` : `gave up after <b>${s.guesses.length}</b>`}`;
+    sum.innerHTML = `${flame("lit")} ${line("You", seekState)} · ${line(esc(theirName()), watchState)}`;
+    sum.classList.remove("hidden");
+  } else sum.classList.add("hidden");
+}
+
+function show(which) {
+  tab = which === "watch" ? "watch" : "seek";
+  store.set(`warmer:tab:${id}`, tab);
+  for (const t of ["seek", "watch"]) {
+    $(`#tab-${t}`).setAttribute("aria-selected", t === tab);
+    $(`#panel-${t}`).classList.toggle("hidden", t !== tab);
+  }
+  if (tab === "watch") unseen = 0;
+  const s = tab === "watch" ? observer.state : seeker?.state;
+  setGlow(s?.guesses.length ? Math.max(...s.guesses.map((g) => proximity(g, s.reference))) : 0.3);
+  meta();
+  if (tab === "seek") seeker?.focus();
+}
+document.querySelectorAll(".tabs [data-tab]").forEach((b) => (b.onclick = () => show(b.dataset.tab)));
+
+function presence(p) {
+  const el = $("#presence"), on = (p[them()] || 0) > 0;
+  el.classList.toggle("on", on);
+  el.textContent = M.joined ? `${theirName()} ${on ? "online" : "offline"}` : "waiting for your friend";
+}
+
+$("#msg-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const t = $("#msg").value.trim(); if (!t) return;
+  $("#msg-err").textContent = "";
+  try { await api(`${base}/message?${q}`, { method: "POST", body: { text: t } }); $("#msg").value = ""; }
+  catch (err) { $("#msg-err").textContent = err.message; }
+};
+$("#copy-personal").onclick = (e) => copy(location.href.split("#")[0], e.currentTarget);
+
+function onWatchGuess(g) {
+  if (!observer.add(g)) return;
+  if (tab !== "watch") unseen++;
+  else setGlow(Math.max(...observer.state.guesses.map((x) => proximity(x, observer.state.reference))));
+  const who = theirName(), what = g.word ? `“${g.word}”` : "A hidden guess";
+  if (g.rank === 0) toast(`${who} found your word in ${observer.state.guesses.length} guesses!`, "Solved");
+  else if (g.rank && g.rank <= 10) toast(`${what} is #${g.rank} — ${who} is very close to your word.`, "Burning");
+  meta();
+}
+
+load().then(() => {
+  $("#loading").classList.add("hidden"); $("#game").classList.remove("hidden");
+  live(`${base}/stream?${q}`, {
+    guess: ({ side, guess }) => {
+      if (side === "watch") return onWatchGuess(guess);
+      if (seeker && !seeker.has(guess.n)) seeker.add(guess);
+      meta();
+    },
+    "guess-update": ({ side, guess }) => { (side === "watch" ? observer : seeker)?.update(guess); },
+    finished: ({ side, state }) => {
+      if (side === "seek") { if (seeker?.state.status === "playing") seeker.finish(state, tab === "seek"); }
+      else {
+        observer.finish(state);
+        if (state.status === "revealed") toast(`${theirName()} gave up and revealed your word.`, "Game over");
+      }
+      meta();
+    },
+    joined: async ({ name }) => { await load(); toast(`${name || "Your friend"} joined and chose a word for you.`, "Let's go"); },
+    message: (m) => {
+      M.messages.push(m); renderMessages($("#msgs"), M.messages, M.me, nameOf);
+      if (m.sender !== M.me) toast(m.text, `${nameOf(m.sender)} says`);
+    },
+    presence: (p) => { M.presence = p; presence(p); },
+  }, load);
+}).catch(() => { $("#loading").classList.add("hidden"); $("#denied").classList.remove("hidden"); });
+</script>
+</body>
+</html>

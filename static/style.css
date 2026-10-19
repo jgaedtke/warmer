@@ -234,3 +234,56 @@ body::after {
 .finish-flame { color: var(--accent); margin-bottom: 6px; }
 .finish-flame .flame { width: 44px; height: 44px; margin: 0; filter: drop-shadow(0 0 14px rgba(242,180,90,.35)); }
 .finish-flame .flame .inner { transform-origin: 12px 20px; animation: flicker 2.6s ease-in-out infinite; }
+
+/* ---------- v2: tabs, sorting, hidden guesses */
+.env-badge { font: 600 10px var(--sans); letter-spacing: .1em; text-transform: uppercase; color: #0b0c0e; background: var(--accent); border-radius: 4px; padding: 2px 6px; margin-left: 4px; }
+
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.list-head h2 { margin: 0; }
+.obs-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 26px; }
+.grid.host > div > * + * { margin-top: 16px; }
+.grid.host > div > div:empty { display: none; }
+.grid.host > div > div:empty + * { margin-top: 0; }
+
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.seg button { appearance: none; border: 0; background: transparent; color: var(--faint); font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; transition: color .15s, background .15s; }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: #262a31; color: var(--text); }
+
+.icon-btn { padding: 0 12px; color: var(--muted); font-size: 12px; gap: 6px; }
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn.on { color: var(--accent); border-color: rgba(242,180,90,.45); background: rgba(242,180,90,.08); }
+.input.private { border-style: dashed; border-color: rgba(242,180,90,.35); }
+@media (max-width: 600px) { .icon-btn span { display: none; } }
+
+.masked { letter-spacing: .12em; color: var(--muted); }
+.g-table td.v, .g-table th.v { width: 34px; padding-left: 0; padding-right: 0; text-align: center; }
+.vis { appearance: none; border: 0; background: none; padding: 4px; border-radius: 6px; color: var(--faint); cursor: pointer; opacity: 0; transition: opacity .15s, color .15s; display: inline-flex; }
+.vis svg { width: 16px; height: 16px; }
+.vis.on { opacity: 1; color: var(--accent); }
+tr:hover .vis, .vis:focus-visible { opacity: 1; }
+.vis:hover { color: var(--text); background: var(--surface-2); }
+@media (hover: none) { .vis { opacity: .6; } }
+.g-table tr.is-hidden td.w { color: var(--muted); }
+.hidden-note { font: 11px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-left: 12px; vertical-align: 6px; display: inline-flex; align-items: center; gap: 4px; }
+.hidden-note svg { width: 13px; height: 13px; }
+.how p { margin: 10px 0 0; }
+.how summary { cursor: pointer; font-size: 13px; }
+
+.duo { font-size: clamp(30px, 5vw, 44px); margin-bottom: 8px; }
+.duo .amp { color: var(--accent); font-style: italic; }
+.summary { color: var(--muted); margin: 0 0 18px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+.summary .flame { color: var(--accent); }
+
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid var(--line); margin: 26px 0 30px; }
+.tabs button { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 12px 4px 14px; text-align: left; cursor: pointer; color: var(--muted); position: relative; transition: color .15s, border-color .15s; }
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tabs .t { display: block; font-family: var(--serif); font-size: 22px; line-height: 1.15; }
+.tabs .m { display: block; font: 12px var(--mono); color: var(--faint); margin-top: 4px; }
+.tabs .badge { position: absolute; top: 12px; right: 8px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: #0b0c0e; font: 600 11px/20px var(--sans); text-align: center; }
+@media (max-width: 600px) { .tabs .t { font-size: 18px; } }
+
+.waiting { text-align: center; padding: 36px 22px; }
+.waiting .linkbox { max-width: 520px; margin: 20px auto 0; text-align: left; }
+.personal { font-size: 12px; margin-top: 28px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

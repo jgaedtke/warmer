@@ -124,13 +124,64 @@ function live(url, handlers, onReconnect) {
   return () => es.close();
 }
 
-function renderMessages(el, msgs, me) {
-  el.innerHTML = msgs.map((m) => `<div class="msg ${m.sender === me ? "me" : ""}"><small>${m.sender === me ? "You" : m.sender === "host" ? "Word-keeper" : "Seeker"} · ${clock(m.ts)}</small>${esc(m.text)}</div>`).join("")
+// `nameOf(sender)` turns a sender id into a display name; the viewer's own messages read "You".
+function renderMessages(el, msgs, me, nameOf) {
+  el.innerHTML = msgs.map((m) => `<div class="msg ${m.sender === me ? "me" : ""}"><small>${m.sender === me ? "You" : esc(nameOf(m.sender))} · ${clock(m.ts)}</small>${esc(m.text)}</div>`).join("")
     || `<div class="faint" style="font-size:13px">No messages yet.</div>`;
   el.scrollTop = el.scrollHeight;
 }
+
+// ---------- guesses
+
+const MASK = "•••••••";  // fixed length, so a hidden guess doesn't leak its word length
+
+function guessWord(g) {
+  const text = g.word == null ? `<span class="masked" title="Hidden by the seeker">${MASK}</span>` : esc(g.word);
+  return text + (g.hint ? '<span class="tag">hint</span>' : "");
+}
+
+const sorters = {
+  closest: (a, b) => b.sim - a.sim || b.n - a.n,
+  recent: (a, b) => b.n - a.n,
+};
+const sortGuesses = (gs, mode) => [...gs].sort(sorters[mode] || sorters.closest);
+
+// Tiny wrapper so storage failures (private mode, blocked cookies) never break the page.
+const store = {
+  get(k, d = null) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+// Segmented "Closest | Recent" control, remembered per view in this browser.
+function sortToggle(el, key, fallback, onChange) {
+  let mode = store.get(key, fallback);
+  const render = () => {
+    el.innerHTML = ["closest", "recent"].map((m) =>
+      `<button type="button" class="${m === mode ? "on" : ""}" data-m="${m}" aria-pressed="${m === mode}">${m === "closest" ? "Closest" : "Recent"}</button>`).join("");
+  };
+  el.classList.add("seg");
+  el.onclick = (e) => {
+    const m = e.target.closest("button")?.dataset.m;
+    if (!m || m === mode) return;
+    mode = m; store.set(key, m); render(); onChange(m);
+  };
+  render();
+  return () => mode;
+}
+
+const EYE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg>`;
+const EYE_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.6c.5-.1.9-.1 1.4-.1 6.4 0 10 6.5 10 6.5a17 17 0 0 1-3.2 3.9M6.6 6.7C3.7 8.5 2 12 2 12s3.6 6.5 10 6.5c1.6 0 3-.4 4.3-1"/><path d="M9.9 9.9a2.8 2.8 0 0 0 4.2 4.2"/></svg>`;
 
 const BRAND = `<a class="brand" href="/"><svg class="brand-mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
   <defs><linearGradient id="brand-grad" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f2b45a"/><stop offset="1" stop-color="#f06a5d"/></linearGradient></defs>
   <path d="${FLAME_OUTER}" stroke="url(#brand-grad)" stroke-width="1.5" stroke-linejoin="round"/><path class="ember" d="${FLAME_INNER}" fill="#f2b45a"/></svg>warmer</a>`;
 document.querySelectorAll("[data-brand]").forEach((el) => (el.outerHTML = BRAND));
+
+// Non-production deploys (WARMER_ENV, e.g. "staging") get a visible badge next to the logo.
+api("/api/config").then((c) => {
+  if (!c.env) return;
+  const b = document.createElement("span");
+  b.className = "env-badge"; b.textContent = c.env;
+  $(".brand")?.append(b);
+  document.title = `[${c.env}] ${document.title}`;
+}).catch(() => {});

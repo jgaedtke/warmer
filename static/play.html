@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<!-- One-way games created before two-way matches existed: the seeker's open link. -->
 <div class="wrap">
   <header class="top"><span data-brand></span><span class="top-meta"><span class="pill live" id="watching">offline</span></span></header>
 
@@ -19,139 +20,45 @@
 
   <main id="game" class="hidden">
     <h1 id="title"></h1>
-    <div class="theme-banner hidden" id="theme"><small>Clue</small><span></span></div>
-
-    <section id="finish" class="card finish hidden fade-in"></section>
-
-    <div id="board">
-      <form class="guess-form" id="guess-form" autocomplete="off">
-        <input class="input big" id="guess" placeholder="Type a word…" maxlength="40" spellcheck="false" autocapitalize="off" autofocus>
-        <button class="btn primary" id="guess-btn">Guess</button>
-      </form>
-      <div class="status-line" id="guess-status"></div>
-      <div id="latest"></div>
-      <p class="ref" id="ref"></p>
-      <div class="actions">
-        <button class="btn sm ghost" id="hint-btn">Hint</button>
-        <button class="btn sm ghost" id="giveup-btn">Give up</button>
-      </div>
-    </div>
-
-    <section class="section-gap">
-      <div class="row" style="justify-content:space-between"><h2 id="count">Guesses</h2><span class="faint mono" style="font-size:12px" id="sort-note">sorted by closeness</span></div>
-      <table class="g-table"><thead><tr><th class="hide-sm">#</th><th>Word</th><th style="text-align:right">Similarity</th><th>Proximity</th></tr></thead><tbody id="rows"></tbody></table>
-      <div class="empty" id="no-guesses">Your guesses will appear here. Start anywhere — every word is a clue.</div>
-    </section>
-
+    <div id="seeker"></div>
     <section class="card section-gap" id="chat">
       <h2>Messages with <span class="host-name">the word-keeper</span></h2>
       <div class="msgs" id="msgs"></div>
       <form class="row" id="msg-form" autocomplete="off"><input class="input grow" id="msg" maxlength="280" placeholder="Say something…"><button class="btn">Send</button></form>
     </section>
-
-    <details class="section-gap faint" style="font-size:13px">
-      <summary style="cursor:pointer">How it works</summary>
-      <p>Each guess is scored by cosine similarity between its word2vec vector (trained on ~100 billion words of Google News) and the secret word's vector, shown ×100. If your guess is among the 1,000 dictionary words closest to the secret, you also see its rank — <span class="mono">1 / 1000</span> is the very nearest. Similarity reflects how words are <em>used</em>, not strictly what they mean, so opposites and related ideas often score high.</p>
-    </details>
   </main>
 </div>
 
 <script src="/static/common.js"></script>
+<script src="/static/seeker.js"></script>
 <script>
 const id = location.pathname.split("/").pop();
-let S, latestWord = null;
+let S;
+const keeperName = () => S?.keeper_name || "";
+const nameOf = (s) => (s === "host" ? keeperName() || "Word-keeper" : "Seeker");
+const panel = SeekerPanel($("#seeker"), {
+  urls: { guess: `/api/games/${id}/guess`, hint: `/api/games/${id}/hint`, giveUp: `/api/games/${id}/give-up`, visibility: `/api/games/${id}/visibility` },
+  keeperName,
+  finishCta: `<a class="btn primary" href="/">Choose a word for someone →</a>`,
+  onHeat: setGlow,
+});
 
 async function load() {
   try { S = await api(`/api/games/${id}`); }
-  catch { $("#loading").classList.add("hidden"); $("#missing").classList.remove("hidden"); return; }
+  catch { $("#loading").classList.add("hidden"); $("#missing").classList.remove("hidden"); return false; }
   $("#loading").classList.add("hidden"); $("#game").classList.remove("hidden");
-  const who = S.host_name || "Someone";
-  $("#title").innerHTML = `${esc(who)} chose a word <em>for you</em>.`;
-  document.querySelectorAll(".host-name").forEach((el) => (el.textContent = S.host_name || "the word-keeper"));
-  if (S.theme) { $("#theme").classList.remove("hidden"); $("#theme span").textContent = S.theme; }
-  $("#hint-btn").classList.toggle("hidden", !S.allow_hints);
-  const r = S.reference;
-  $("#ref").innerHTML = `The nearest word scores <b>${r.top1}</b>, the 10th nearest <b>${r.top10}</b>, and the 1000th <b>${r.top1000}</b>.`;
-  if (S.guesses.length) latestWord = S.guesses[S.guesses.length - 1].word;
-  render(); renderMessages($("#msgs"), S.messages, "player"); presence(S.presence);
-  if (S.status !== "playing") finish(S, false);
-}
-
-function render(flashWord) {
-  const ref = S.reference, gs = [...S.guesses].sort((a, b) => b.sim - a.sim);
-  $("#count").textContent = `${S.guesses.length} guess${S.guesses.length === 1 ? "" : "es"}`;
-  $("#no-guesses").classList.toggle("hidden", gs.length > 0);
-  let sepDone = false;
-  $("#rows").innerHTML = gs.map((g) => {
-    let sep = "";
-    if (!g.rank && g.rank !== 0 && !sepDone) { sepDone = true; if (gs[0] !== g) sep = `<tr class="sep"><td colspan="4"></td></tr>`; }
-    const cls = [g.word === latestWord ? "latest" : "", g.word === flashWord ? "flash" : ""].join(" ");
-    return sep + `<tr class="${cls}" style="--c:${heat(proximity(g, ref))}"><td class="n">${g.n}</td><td class="w">${esc(g.word)}${g.hint ? '<span class="tag">hint</span>' : ""}</td><td class="s">${g.sim.toFixed(2)}</td><td class="p">${proxCell(g, ref)}</td></tr>`;
-  }).join("");
-  growBars($("#rows"));
-  const last = S.guesses.find((g) => g.word === latestWord);
-  if (last) {
-    const p = proximity(last, ref);
-    $("#latest").innerHTML = `<div class="latest-card fade-in" style="--c:${heat(p)}"><span class="word">${esc(last.word)}</span><span class="meta"><b>${heatIcon(last)}${word(last)}</b>${last.sim.toFixed(2)} · ${label(last, ref)}</span></div>`;
-    const best = Math.max(...S.guesses.map((g) => proximity(g, ref)));
-    setGlow(best);
-  }
-}
-
-function addGuess(g) {
-  if (!S.guesses.some((x) => x.word === g.word)) S.guesses.push(g);
-  latestWord = g.word;
-  render(g.word);
-}
-
-$("#guess-form").onsubmit = async (e) => {
-  e.preventDefault();
-  const input = $("#guess"), w = input.value.trim(), st = $("#guess-status");
-  if (!w) return;
-  st.textContent = ""; st.className = "status-line";
-  try {
-    const r = await api(`/api/games/${id}/guess`, { method: "POST", body: { word: w } });
-    input.value = "";
-    if (r.duplicate) { st.textContent = `You already tried “${r.guess.word}”.`; latestWord = r.guess.word; render(r.guess.word); return; }
-    addGuess(r.guess);
-  } catch (err) { st.className = "status-line err"; st.textContent = err.message; input.select(); }
-};
-
-$("#hint-btn").onclick = async () => {
-  try { const r = await api(`/api/games/${id}/hint`, { method: "POST" }); addGuess(r.guess); toast(`Try thinking about “${r.guess.word}”.`, "Hint"); }
-  catch (err) { toast(err.message); }
-};
-
-$("#giveup-btn").onclick = async () => {
-  if (!confirm("Reveal the secret word? This ends the game.")) return;
-  finish(await api(`/api/games/${id}/give-up`, { method: "POST" }), true);
-};
-
-function finish(state, animate) {
-  Object.assign(S, state);
-  $("#board").classList.add("hidden");
-  const solved = state.status === "solved";
-  const n = S.guesses.length;
-  const f = $("#finish");
-  f.innerHTML = `
-    ${solved ? `<div class="finish-flame">${flame("lit")}</div>` : ""}
-    <h2>${solved ? `Found in ${n} guess${n === 1 ? "" : "es"}` : "The word was"}</h2>
-    <div class="secret-word">${esc(state.secret)}</div>
-    ${state.note ? `<p class="note">${esc(state.note)}</p>${S.host_name ? `<p class="muted" style="margin-top:8px">— ${esc(S.host_name)}</p>` : ""}` : ""}
-    <div style="margin-top:30px;text-align:left"><h2>The 100 nearest words</h2><div class="chips">${state.neighbours.map(([w, s], i) => {
-      const hit = S.guesses.some((g) => g.word === w);
-      return `<span class="chip ${hit ? "hit" : ""}" style="--c:${heat(rankProximity(i + 1))}" title="#${i + 1}"><b>${esc(w)}</b>${s}</span>`;
-    }).join("")}</div></div>
-    <div class="actions" style="justify-content:center;margin-top:28px"><a class="btn primary" href="/">Choose a word for someone →</a></div>`;
-  f.classList.remove("hidden");
-  setGlow(solved ? 1 : 0.2);
-  if (animate) f.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#title").innerHTML = `${esc(S.keeper_name || "Someone")} chose a word <em>for you</em>.`;
+  document.querySelectorAll(".host-name").forEach((el) => (el.textContent = S.keeper_name || "the word-keeper"));
+  panel.load(S);
+  renderMessages($("#msgs"), S.messages, "player", nameOf);
+  presence(S.presence);
+  return true;
 }
 
 function presence(p) {
-  const el = $("#watching"), on = p.hosts > 0;
+  const el = $("#watching"), on = (p.host || 0) > 0;
   el.classList.toggle("on", on);
-  el.textContent = on ? `${S.host_name || "Word-keeper"} is watching` : "not watching";
+  el.textContent = on ? `${keeperName() || "Word-keeper"} is watching` : "not watching";
 }
 
 $("#msg-form").onsubmit = async (e) => {
@@ -161,17 +68,18 @@ $("#msg-form").onsubmit = async (e) => {
   try { await api(`/api/games/${id}/message`, { method: "POST", body: { text: t } }); } catch (err) { toast(err.message); }
 };
 
-load().then(() => {
-  if (!S) return;
+load().then((ok) => {
+  if (!ok) return;
   live(`/api/games/${id}/stream`, {
-    guess: (g) => { if (!S.guesses.some((x) => x.word === g.word)) { addGuess(g); } },
+    guess: ({ guess }) => { if (!panel.has(guess.n)) panel.add(guess); },
+    "guess-update": ({ guess }) => panel.update(guess),
     message: (m) => {
-      S.messages.push(m); renderMessages($("#msgs"), S.messages, "player");
-      if (m.sender === "host") toast(m.text, `${S.host_name || "Word-keeper"} says`);
+      S.messages.push(m); renderMessages($("#msgs"), S.messages, "player", nameOf);
+      if (m.sender === "host") toast(m.text, `${keeperName() || "Word-keeper"} says`);
     },
     presence,
-    finished: (st) => { if ($("#finish").classList.contains("hidden")) finish(st, true); },
-  }, async () => { const fresh = await api(`/api/games/${id}`); S.guesses = fresh.guesses; S.messages = fresh.messages; render(); renderMessages($("#msgs"), S.messages, "player"); });
+    finished: ({ state }) => { if (panel.state.status === "playing") panel.finish(state, true); },
+  }, async () => { S = await api(`/api/games/${id}`); panel.load(S); renderMessages($("#msgs"), S.messages, "player", nameOf); });
 });
 </script>
 </body>
