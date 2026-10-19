@@ -51,8 +51,8 @@ Games created before two-way play (one-way `/g/<id>` and `/h/<id>?k=…` links) 
 |---|---|---|
 | `PORT` | `8000` | HTTP port |
 | `WARMER_DB` | `./warmer.db` | SQLite database path |
-| `WARMER_DEFAULT_NAME` | *(empty)* | Pre-fills the creator's name on the start page |
-| `WARMER_ENV` | *(empty)* | Label such as `staging` or `local`, shown as a badge on every page |
+| `WARMER_DEFAULT_NAME` | `Jason` | Pre-fills the creator's name on the start page |
+| `WARMER_ENV` | `staging` | Label such as `staging` or `local`, shown as a badge on every page |
 
 ## Development workflow
 
