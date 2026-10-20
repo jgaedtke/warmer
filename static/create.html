@@ -99,12 +99,15 @@ $("#form").onsubmit = async (e) => {
   submitBtn.disabled = true;
   const body = { secret: okWord, name: $("#name").value, theme: $("#theme").value, note: $("#note").value, allow_hints: $("#allow_hints").checked };
   try {
-    const r = await api(joinId ? `/api/matches/${joinId}/join` : "/api/matches", { method: "POST", body });
+    var r = await api(joinId ? `/api/matches/${joinId}/join` : "/api/matches", { method: "POST", body });
+  } catch (err) { $("#submit-err").textContent = err.message; submitBtn.disabled = false; return; }
+  // The game exists now: whatever happens while remembering it, take the player in.
+  try {
     store.set("warmer:name", $("#name").value);
     store.set(`warmer:match:${r.id}`, r.token);
     saveGame({ id: r.id, word: okWord, url: r.url, created: Date.now() });
-    location.href = r.url;
-  } catch (err) { $("#submit-err").textContent = err.message; submitBtn.disabled = false; }
+  } catch {}
+  location.href = r.url;
 };
 
 function loadGames() { try { return JSON.parse(store.get("warmer:games", "[]")); } catch { return []; } }

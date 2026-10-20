@@ -9,6 +9,7 @@ Puzzles created before matches existed (match_id NULL) are one-way games served 
 /g/<id> (seeker, open link) and /h/<id>?k=<host_token> (keeper).
 """
 import asyncio
+import hashlib
 import json
 import os
 import random
@@ -21,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -252,6 +253,30 @@ def publish_finished(g):
 app = FastAPI(title="Warmer")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
+# Fingerprint of the front-end code. Pages reference /static/x.js?v=<this>, so each release
+# loads fresh URLs instead of whatever a browser cached from the last one (a cached old
+# common.js under a new page breaks it).
+ASSET_VERSION = hashlib.sha256(b"".join(f.read_bytes() for f in sorted(STATIC.iterdir()) if f.is_file())).hexdigest()[:10]
+ASSET_REF = re.compile(r'((?:src|href)="/static/[\w.-]+\.(?:js|css|svg))"')
+
+
+@app.middleware("http")
+async def revalidate(request: Request, call_next):
+    """Browsers may keep files but must check they're current before using them."""
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@lru_cache(maxsize=None)
+def page_html(name):
+    return ASSET_REF.sub(rf'\1?v={ASSET_VERSION}"', (STATIC / name).read_text())
+
+
+def page(name):
+    return HTMLResponse(page_html(name), headers={"Cache-Control": "no-cache"})
+
 
 def sse(gen):
     return StreamingResponse(gen, media_type="text/event-stream",
@@ -262,27 +287,27 @@ def sse(gen):
 
 @app.get("/")
 def page_create():
-    return FileResponse(STATIC / "create.html")
+    return page("create.html")
 
 
 @app.get("/j/{match_id}")
 def page_join(match_id: str):
-    return FileResponse(STATIC / "create.html")
+    return page("create.html")
 
 
 @app.get("/m/{match_id}")
 def page_match(match_id: str):
-    return FileResponse(STATIC / "match.html")
+    return page("match.html")
 
 
 @app.get("/g/{game_id}")
 def page_play(game_id: str):
-    return FileResponse(STATIC / "play.html")
+    return page("play.html")
 
 
 @app.get("/h/{game_id}")
 def page_host(game_id: str):
-    return FileResponse(STATIC / "host.html")
+    return page("host.html")
 
 
 # ---------------------------------------------------------------- shared API

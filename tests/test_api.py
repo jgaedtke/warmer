@@ -181,3 +181,16 @@ def test_migrates_a_v1_database(tmp_path, monkeypatch):
     g = guess("/api/games/old1/guess", "pier")
     assert g["n"] == 2
     assert new_match()["id"]  # new tables work on the migrated file too
+
+
+# ---------------------------------------------------------------- caching
+
+def test_pages_reference_versioned_assets():
+    """Each release must load fresh JS/CSS, never a copy cached from the previous release."""
+    for path in ["/", "/j/x", "/m/x", "/g/x", "/h/x"]:
+        r = client.get(path)
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"
+        refs = __import__("re").findall(r'(?:src|href)="(/static/[^"]+)"', r.text)
+        assert refs and all(f"?v={warmer.ASSET_VERSION}" in u for u in refs), refs
+        for u in refs:
+            assert client.get(u).headers["cache-control"] == "no-cache"
